@@ -1,7 +1,24 @@
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Activity, BarChart3, Network, Rocket, Settings } from "lucide-react";
-import { motion } from "motion/react";
+import {
+  Activity,
+  AlertCircle,
+  BarChart,
+  BarChart3,
+  Brain,
+  FileText,
+  Network,
+  Package,
+  Rocket,
+  Settings,
+  TrendingUp,
+} from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { useState } from "react";
+import { AgentType } from "../backend";
+import type { KnowledgeEntry } from "../backend";
 import AdminDashboard from "../components/AdminDashboard";
 import AgentsDashboard from "../components/AgentsDashboard";
 import CampaignLauncher from "../components/CampaignLauncher";
@@ -9,15 +26,34 @@ import NetworkVisualization from "../components/NetworkVisualization";
 import SystemMonitor from "../components/SystemMonitor";
 import {
   useGetAllAutomationStatuses,
+  useGetCallerKnowledgeEntries,
   useGetCollaborationStats,
+  useGetTotalActiveOffers,
 } from "../hooks/useQueries";
+
+type Tab = "command" | "performance" | "logs" | "admin";
 
 export default function Dashboard() {
   const { data: automationStatuses } = useGetAllAutomationStatuses();
-  const { data: collaborationStats } = useGetCollaborationStats();
+  const { data: collaborationStats } = useGetCollaborationStats(); // only populated for admins
+  const { data: totalActiveOffers } = useGetTotalActiveOffers();
+  const [activeTab, setActiveTab] = useState<Tab>("command");
+  const [prefilledNiche, setPrefilledNiche] = useState<string | undefined>();
 
   const runningCount =
     automationStatuses?.filter(([, s]) => s.running).length ?? 0;
+  const offerCount =
+    totalActiveOffers !== undefined ? Number(totalActiveOffers) : null;
+  const hasNoOffers = offerCount === 0;
+
+  const handleGoToAdmin = () => {
+    setActiveTab("admin");
+  };
+
+  const handleGoToCommandWithNiche = (niche: string) => {
+    setPrefilledNiche(niche);
+    setActiveTab("command");
+  };
 
   return (
     <div className="grid-bg min-h-screen">
@@ -57,31 +93,45 @@ export default function Dashboard() {
           </div>
         </motion.div>
 
-        {/* ── Campaign Launcher ──────────────────────────────── */}
-        <motion.div
-          initial={{ opacity: 0, y: 12 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.1 }}
-          className="rounded-xl border border-primary/20 bg-card/80 p-5 backdrop-blur-sm shadow-lg"
-          style={{ boxShadow: "0 0 32px oklch(0.72 0.19 218 / 0.06)" }}
-        >
-          <div className="mb-4 flex items-center gap-2">
-            <Rocket className="h-5 w-5 text-primary" />
-            <h2 className="font-display text-lg font-bold tracking-tight">
-              Campaign Launcher
-            </h2>
-            <span className="text-xs text-muted-foreground">
-              Enter a niche to launch a full AI-driven funnel
-            </span>
-          </div>
-          <CampaignLauncher />
-        </motion.div>
+        {/* ── Setup Guide Banner ─────────────────────────────── */}
+        <AnimatePresence>
+          {hasNoOffers && (
+            <motion.div
+              initial={{ opacity: 0, y: -8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, height: 0 }}
+              className="flex items-start gap-4 rounded-xl border border-amber-500/30 bg-amber-500/10 px-5 py-4"
+              data-ocid="dashboard.setup_guide.panel"
+            >
+              <AlertCircle className="h-5 w-5 text-amber-400 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-amber-300">
+                  Your first step: Add affiliate offers in the Admin tab →
+                  Offers section.
+                </p>
+                <p className="text-xs text-amber-400/80 mt-1">
+                  The agents need offers to pick from — without them, campaigns
+                  can't select a product. Add at least one offer to get started.
+                </p>
+              </div>
+              <Button
+                data-ocid="dashboard.go_to_admin.button"
+                size="sm"
+                variant="outline"
+                onClick={handleGoToAdmin}
+                className="shrink-0 border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/60"
+              >
+                Go to Admin → Offers
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-        {/* ── Network Visualization ──────────────────────────── */}
+        {/* ── Network Visualization (compact, always visible) ── */}
         <motion.div
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
+          transition={{ duration: 0.5, delay: 0.15 }}
           className="overflow-hidden rounded-xl border border-border bg-card/60 backdrop-blur-sm"
           style={{ boxShadow: "0 0 48px oklch(0.68 0.22 295 / 0.06)" }}
         >
@@ -96,7 +146,7 @@ export default function Dashboard() {
               Real-time collaboration visualization
             </span>
           </div>
-          <div className="h-[320px] w-full">
+          <div className="h-[260px] w-full">
             <NetworkVisualization
               automationStatuses={automationStatuses}
               collaborationStats={collaborationStats}
@@ -108,36 +158,40 @@ export default function Dashboard() {
         <motion.div
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.3 }}
+          transition={{ duration: 0.4, delay: 0.25 }}
         >
-          <Tabs defaultValue="agents" className="space-y-6">
+          <Tabs
+            value={activeTab}
+            onValueChange={(v) => setActiveTab(v as Tab)}
+            className="space-y-6"
+          >
             <TabsList
               className="grid w-full max-w-2xl grid-cols-4 bg-card/80 border border-border"
               data-ocid="dashboard.tab"
             >
               <TabsTrigger
-                value="agents"
-                data-ocid="dashboard.agents.tab"
+                value="command"
+                data-ocid="dashboard.command.tab"
                 className="gap-1.5 data-[state=active]:bg-primary/15 data-[state=active]:text-primary"
               >
-                <Activity className="h-4 w-4" />
-                <span className="hidden sm:inline">Agents</span>
+                <Rocket className="h-4 w-4" />
+                <span className="hidden sm:inline">Command</span>
               </TabsTrigger>
               <TabsTrigger
-                value="system"
-                data-ocid="dashboard.system.tab"
+                value="performance"
+                data-ocid="dashboard.performance.tab"
                 className="gap-1.5 data-[state=active]:bg-primary/15 data-[state=active]:text-primary"
               >
                 <BarChart3 className="h-4 w-4" />
-                <span className="hidden sm:inline">Monitor</span>
+                <span className="hidden sm:inline">Performance</span>
               </TabsTrigger>
               <TabsTrigger
-                value="network"
-                data-ocid="dashboard.network.tab"
+                value="logs"
+                data-ocid="dashboard.logs.tab"
                 className="gap-1.5 data-[state=active]:bg-primary/15 data-[state=active]:text-primary"
               >
-                <Network className="h-4 w-4" />
-                <span className="hidden sm:inline">Knowledge</span>
+                <Activity className="h-4 w-4" />
+                <span className="hidden sm:inline">Agent Logs</span>
               </TabsTrigger>
               <TabsTrigger
                 value="admin"
@@ -149,20 +203,45 @@ export default function Dashboard() {
               </TabsTrigger>
             </TabsList>
 
-            <TabsContent value="agents" className="space-y-6">
+            {/* ── Command Center ─────────────────────────────── */}
+            <TabsContent value="command" className="space-y-6">
+              {/* Campaign Launcher */}
+              <div
+                className="rounded-xl border border-primary/20 bg-card/80 p-5 backdrop-blur-sm shadow-lg"
+                style={{ boxShadow: "0 0 32px oklch(0.72 0.19 218 / 0.06)" }}
+              >
+                <div className="mb-4 flex items-center gap-2">
+                  <Rocket className="h-5 w-5 text-primary" />
+                  <h2 className="font-display text-lg font-bold tracking-tight">
+                    Campaign Launcher
+                  </h2>
+                  <span className="text-xs text-muted-foreground">
+                    Enter a niche to launch a full AI-driven funnel
+                  </span>
+                </div>
+                <CampaignLauncher
+                  onGoToAdmin={handleGoToAdmin}
+                  key={prefilledNiche}
+                />
+              </div>
+
+              {/* Agents Dashboard */}
               <AgentsDashboard />
             </TabsContent>
 
-            <TabsContent value="system" className="space-y-6">
+            {/* ── Performance ────────────────────────────────── */}
+            <TabsContent value="performance" className="space-y-6">
+              <PerformanceTab onGoToAdmin={handleGoToAdmin} />
+            </TabsContent>
+
+            {/* ── Agent Logs ─────────────────────────────────── */}
+            <TabsContent value="logs" className="space-y-6">
               <SystemMonitor />
             </TabsContent>
 
-            <TabsContent value="network" className="space-y-6">
-              <KnowledgeCoreFeed />
-            </TabsContent>
-
+            {/* ── Admin ──────────────────────────────────────── */}
             <TabsContent value="admin" className="space-y-6">
-              <AdminDashboard />
+              <AdminDashboard onLaunchCampaign={handleGoToCommandWithNiche} />
             </TabsContent>
           </Tabs>
         </motion.div>
@@ -171,12 +250,215 @@ export default function Dashboard() {
   );
 }
 
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { BarChart, Brain, FileText, TrendingUp } from "lucide-react";
-import { AgentType } from "../backend";
-/* ── Knowledge Core Feed (inline for simplicity) ─────────── */
-import { useGetCallerKnowledgeEntries } from "../hooks/useQueries";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { DollarSign, MousePointerClick, Target } from "lucide-react";
+/* ── Performance Tab ──────────────────────────────────────── */
+import {
+  useGetAllOffers,
+  useGetOfferPerformanceSummary,
+} from "../hooks/useQueries";
 
+function PerformanceTab({ onGoToAdmin }: { onGoToAdmin: () => void }) {
+  const { data: offers = [] } = useGetAllOffers();
+  const { data: performanceSummary } = useGetOfferPerformanceSummary();
+  const { data: knowledgeEntries = [] } = useGetCallerKnowledgeEntries();
+
+  const totalClicks =
+    performanceSummary?.clickCounts.reduce((s, [, c]) => s + Number(c), 0) ?? 0;
+  const totalRevenue = Number(performanceSummary?.revenueTotals ?? 0n) / 100;
+  const avgConvRate = performanceSummary?.conversionRates.length
+    ? performanceSummary.conversionRates.reduce((s, [, r]) => s + r, 0) /
+      performanceSummary.conversionRates.length
+    : 0;
+
+  // Parse display name
+  const parseProductDisplay = (productId: string) => {
+    const name = productId
+      .replace(/\[.*?\]/g, "")
+      .replace(/\{.*?\}/g, "")
+      .trim();
+    const networkMatch = productId.match(/\[(.*?)\]/);
+    const nicheMatch = productId.match(/\{(.*?)\}/);
+    return {
+      name: name || productId,
+      network: networkMatch?.[1] ?? "—",
+      niche: nicheMatch?.[1] ?? "—",
+    };
+  };
+
+  return (
+    <div className="space-y-6">
+      {/* Summary bar */}
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Card className="border-chart-2/20 bg-chart-2/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <DollarSign className="h-4 w-4 text-chart-2" />
+              Total Revenue
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-chart-2 font-display">
+              ${totalRevenue.toFixed(2)}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              from {offers.length} offers
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-primary/20 bg-primary/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <MousePointerClick className="h-4 w-4 text-primary" />
+              Total Clicks
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-primary font-display">
+              {totalClicks.toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              across all offers
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="border-chart-3/20 bg-chart-3/5">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Target className="h-4 w-4 text-chart-3" />
+              Avg Conversion
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-3xl font-bold text-chart-3 font-display">
+              {(avgConvRate * 100).toFixed(1)}%
+            </div>
+            <p className="text-xs text-muted-foreground mt-0.5">average rate</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Offers table */}
+      <Card>
+        <CardHeader className="pb-4">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Package className="h-4 w-4 text-chart-2" />
+            Offer Performance
+            <Badge variant="outline" className="ml-auto font-normal">
+              {offers.length} offers
+            </Badge>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {offers.length === 0 ? (
+            <div
+              data-ocid="performance.offers.empty_state"
+              className="flex flex-col items-center justify-center py-16 text-center"
+            >
+              <TrendingUp className="h-12 w-12 text-muted-foreground/20 mb-4" />
+              <p className="text-base font-semibold text-muted-foreground">
+                No offers tracked yet
+              </p>
+              <p className="text-sm text-muted-foreground/60 mt-1 max-w-sm">
+                Add affiliate offers in the Admin tab to start tracking
+                performance data.
+              </p>
+              <Button
+                data-ocid="performance.go_to_admin.button"
+                variant="outline"
+                size="sm"
+                onClick={onGoToAdmin}
+                className="mt-4 gap-2"
+              >
+                <Settings className="h-3.5 w-3.5" />
+                Go to Admin → Offers
+              </Button>
+            </div>
+          ) : (
+            <div className="overflow-auto">
+              <Table data-ocid="performance.offers.table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Product</TableHead>
+                    <TableHead>Network</TableHead>
+                    <TableHead>Niche</TableHead>
+                    <TableHead className="text-right">Payout</TableHead>
+                    <TableHead className="text-right">Commission</TableHead>
+                    <TableHead className="text-right">Clicks</TableHead>
+                    <TableHead className="text-right">Conv %</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {offers.map((offer, idx) => {
+                    const parsed = parseProductDisplay(offer.productId);
+                    const clicks =
+                      performanceSummary?.clickCounts.find(
+                        ([id]) => id === offer.id,
+                      )?.[1] ?? 0n;
+                    const convRate =
+                      performanceSummary?.conversionRates.find(
+                        ([id]) => id === offer.id,
+                      )?.[1] ?? 0;
+                    const rev =
+                      performanceSummary?.allMetrics.find(
+                        (m) => m.clickCount === clicks,
+                      )?.revenueTotal ?? 0n;
+
+                    return (
+                      <TableRow
+                        key={offer.id}
+                        data-ocid={`performance.offers.row.${idx + 1}`}
+                      >
+                        <TableCell className="font-medium">
+                          {parsed.name}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {parsed.network}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {parsed.niche}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          ${(Number(offer.priceInCents) / 100).toFixed(2)}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {(offer.commissionRate * 100).toFixed(0)}%
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {Number(clicks).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right font-mono">
+                          {(convRate * 100).toFixed(1)}%
+                        </TableCell>
+                        <TableCell className="text-right font-mono text-chart-2 font-semibold">
+                          ${(Number(rev) / 100).toFixed(2)}
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Knowledge entries */}
+      <KnowledgeCoreFeed entries={knowledgeEntries} isLoading={false} />
+    </div>
+  );
+}
+
+/* ── Knowledge Core Feed ──────────────────────────────────── */
 const agentBadgeConfig: Record<
   AgentType,
   { label: string; color: string; icon: typeof Brain }
@@ -203,16 +485,20 @@ const agentBadgeConfig: Record<
   },
 };
 
-function KnowledgeCoreFeed() {
-  const { data: entries = [], isLoading } = useGetCallerKnowledgeEntries();
-
+function KnowledgeCoreFeed({
+  entries,
+  isLoading,
+}: {
+  entries: KnowledgeEntry[];
+  isLoading: boolean;
+}) {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-xl font-bold font-display">Knowledge Core</h3>
+          <h3 className="text-xl font-bold font-display">Agent Intelligence</h3>
           <p className="text-sm text-muted-foreground">
-            Shared intelligence built by your agent network
+            Shared knowledge built by your agent network
           </p>
         </div>
         <Badge variant="outline" className="font-mono">
@@ -232,19 +518,18 @@ function KnowledgeCoreFeed() {
       ) : entries.length === 0 ? (
         <div
           data-ocid="knowledge.empty_state"
-          className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/40 py-16 text-center"
+          className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border bg-card/40 py-12 text-center"
         >
-          <Brain className="h-12 w-12 text-muted-foreground/20 mb-4" />
+          <Brain className="h-10 w-10 text-muted-foreground/20 mb-3" />
           <p className="text-base font-semibold text-muted-foreground">
-            No knowledge entries yet
+            No intelligence entries yet
           </p>
           <p className="text-sm text-muted-foreground/60 mt-1 max-w-sm">
-            Run your agents to start building the knowledge base. Each agent
-            contributes insights, strategies, and performance data.
+            Launch a campaign or run agents to build the knowledge base.
           </p>
         </div>
       ) : (
-        <ScrollArea className="h-[500px]">
+        <ScrollArea className="h-[400px]">
           <div className="space-y-3 pr-2">
             {[...entries].reverse().map((entry, idx) => {
               const cfg =

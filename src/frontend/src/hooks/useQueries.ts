@@ -154,14 +154,16 @@ export function useRunAgent() {
 
   return useMutation({
     mutationFn: async (agentType: AgentType) => {
-      if (!actor) throw new Error("Actor not available");
+      if (!actor)
+        throw new Error(
+          "Still connecting to the network — please try again in a moment",
+        );
       return actor.runAgent(agentType);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agentLogs"] });
       queryClient.invalidateQueries({ queryKey: ["automationStatuses"] });
       queryClient.invalidateQueries({ queryKey: ["knowledgeEntries"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborationStats"] });
       queryClient.invalidateQueries({ queryKey: ["offerPerformanceSummary"] });
       queryClient.invalidateQueries({ queryKey: ["allOfferMetrics"] });
       toast.success("Agent executed successfully");
@@ -178,18 +180,20 @@ export function useRunHabitAgent() {
 
   return useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Actor not available");
+      if (!actor)
+        throw new Error(
+          "Still connecting to the network — please try again in a moment",
+        );
       return actor.runHabitAgent();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agentLogs"] });
       queryClient.invalidateQueries({ queryKey: ["automationStatuses"] });
       queryClient.invalidateQueries({ queryKey: ["knowledgeEntries"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborationStats"] });
-      toast.success("Habit agent executed successfully");
+      toast.success("Funnel agent executed successfully");
     },
     onError: (error: Error) => {
-      toast.error(`Failed to run habit agent: ${error.message}`);
+      toast.error(`Failed to run funnel agent: ${error.message}`);
     },
   });
 }
@@ -200,14 +204,16 @@ export function useRunAffiliateAgent() {
 
   return useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Actor not available");
+      if (!actor)
+        throw new Error(
+          "Still connecting to the network — please try again in a moment",
+        );
       return actor.runAffiliateAgent();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agentLogs"] });
       queryClient.invalidateQueries({ queryKey: ["automationStatuses"] });
       queryClient.invalidateQueries({ queryKey: ["knowledgeEntries"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborationStats"] });
       queryClient.invalidateQueries({ queryKey: ["offerPerformanceSummary"] });
       queryClient.invalidateQueries({ queryKey: ["allOfferMetrics"] });
       toast.success("Affiliate agent executed successfully");
@@ -224,14 +230,16 @@ export function useRunCopyAgent() {
 
   return useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Actor not available");
+      if (!actor)
+        throw new Error(
+          "Still connecting to the network — please try again in a moment",
+        );
       return actor.runCopyAgent();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agentLogs"] });
       queryClient.invalidateQueries({ queryKey: ["automationStatuses"] });
       queryClient.invalidateQueries({ queryKey: ["knowledgeEntries"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborationStats"] });
       toast.success("Copy agent executed successfully");
     },
     onError: (error: Error) => {
@@ -246,14 +254,16 @@ export function useRunAnalyticsAgent() {
 
   return useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Actor not available");
+      if (!actor)
+        throw new Error(
+          "Still connecting to the network — please try again in a moment",
+        );
       return actor.runAnalyticsAgent();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agentLogs"] });
       queryClient.invalidateQueries({ queryKey: ["automationStatuses"] });
       queryClient.invalidateQueries({ queryKey: ["knowledgeEntries"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborationStats"] });
       queryClient.invalidateQueries({ queryKey: ["offerPerformanceSummary"] });
       queryClient.invalidateQueries({ queryKey: ["allOfferMetrics"] });
       toast.success("Analytics agent executed successfully");
@@ -270,14 +280,16 @@ export function useRunAllAgents() {
 
   return useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Actor not available");
+      if (!actor)
+        throw new Error(
+          "Still connecting to the network — please try again in a moment",
+        );
       return actor.runAllAgents();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agentLogs"] });
       queryClient.invalidateQueries({ queryKey: ["automationStatuses"] });
       queryClient.invalidateQueries({ queryKey: ["knowledgeEntries"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborationStats"] });
       queryClient.invalidateQueries({ queryKey: ["offerPerformanceSummary"] });
       queryClient.invalidateQueries({ queryKey: ["allOfferMetrics"] });
       toast.success("All agents executed successfully");
@@ -324,15 +336,21 @@ export function useGetCallerKnowledgeEntries() {
 
 export function useGetCollaborationStats() {
   const { actor, isFetching } = useActor();
+  const { data: isAdmin } = useIsCallerAdmin();
 
   return useQuery<Array<[AgentType, bigint]>>({
     queryKey: ["collaborationStats"],
     queryFn: async () => {
-      if (!actor) throw new Error("Actor not available");
-      return actor.getCollaborationStats();
+      if (!actor) return [];
+      try {
+        return await actor.getCollaborationStats();
+      } catch {
+        // Non-admins don't have access to this endpoint — return empty array silently
+        return [];
+      }
     },
-    enabled: !!actor && !isFetching,
-    refetchInterval: 5000, // Refresh every 5 seconds
+    enabled: !!actor && !isFetching && isAdmin === true,
+    refetchInterval: 5000,
   });
 }
 
@@ -342,12 +360,15 @@ export function useRunCollaborationLoop() {
 
   return useMutation({
     mutationFn: async () => {
-      if (!actor) throw new Error("Actor not available");
+      if (!actor)
+        throw new Error(
+          "Still connecting to the network — please try again in a moment",
+        );
       return actor.runCollaborationLoop();
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["knowledgeEntries"] });
-      queryClient.invalidateQueries({ queryKey: ["collaborationStats"] });
+      // collaborationStats is admin-only — do not invalidate for regular users
       toast.success("Collaboration loop executed successfully");
     },
     onError: (error: Error) => {

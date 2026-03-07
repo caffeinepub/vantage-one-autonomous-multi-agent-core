@@ -26,13 +26,16 @@ import {
 } from "@/components/ui/table";
 import {
   BarChart2,
+  CheckCircle2,
   DollarSign,
   Loader2,
   MousePointerClick,
   Plus,
+  Rocket,
   Target,
   TrendingUp,
 } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
 import { useState } from "react";
 import type { Offer } from "../backend";
 import {
@@ -151,40 +154,82 @@ function MetricsForm({
   );
 }
 
-export default function AddOfferForm() {
+interface AddOfferFormProps {
+  onLaunchCampaign?: (niche: string) => void;
+}
+
+export default function AddOfferForm({ onLaunchCampaign }: AddOfferFormProps) {
   const { data: offers = [] } = useGetAllOffers();
   const { data: performanceSummary } = useGetOfferPerformanceSummary();
   const addOffer = useAddOffer();
 
-  const [productId, setProductId] = useState("");
-  const [price, setPrice] = useState("");
-  const [commission, setCommission] = useState("");
+  const [productName, setProductName] = useState("");
+  const [payout, setPayout] = useState("");
+  const [commissionPct, setCommissionPct] = useState("");
+  const [network, setNetwork] = useState("");
+  const [niche, setNiche] = useState("");
   const [metricsOfferId, setMetricsOfferId] = useState<string | null>(null);
   const [metricsDialogOpen, setMetricsDialogOpen] = useState(false);
+  const [justAdded, setJustAdded] = useState<{
+    name: string;
+    niche: string;
+  } | null>(null);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!productId.trim() || !price) return;
+    if (!productName.trim() || !payout) return;
+
+    // Encode network + niche info into productId since backend stores it as string
+    // Format: "ProductName [Network] {niche}"
+    const encodedId = [
+      productName.trim(),
+      network.trim() ? `[${network.trim()}]` : "",
+      niche.trim() ? `{${niche.trim()}}` : "",
+    ]
+      .filter(Boolean)
+      .join(" ");
+
     const now = BigInt(Date.now()) * 1_000_000n;
+    const capturedNiche = niche.trim();
+    const capturedName = productName.trim();
+
     addOffer.mutate(
       {
-        productId: productId.trim(),
-        priceInCents: BigInt(Math.round(Number(price) * 100)),
-        commissionRate: (Number(commission) || 0) / 100,
+        productId: encodedId,
+        priceInCents: BigInt(Math.round(Number(payout) * 100)),
+        commissionRate: (Number(commissionPct) || 0) / 100,
         startDate: now,
         endDate: null,
       },
       {
         onSuccess: () => {
-          setProductId("");
-          setPrice("");
-          setCommission("");
+          setProductName("");
+          setPayout("");
+          setCommissionPct("");
+          setNetwork("");
+          setNiche("");
+          setJustAdded({ name: capturedName, niche: capturedNiche });
         },
       },
     );
   };
 
   const selectedOffer = offers.find((o) => o.id === metricsOfferId);
+
+  // Parse display name from encoded productId
+  const parseProductDisplay = (productId: string) => {
+    const name = productId
+      .replace(/\[.*?\]/g, "")
+      .replace(/\{.*?\}/g, "")
+      .trim();
+    const networkMatch = productId.match(/\[(.*?)\]/);
+    const nicheMatch = productId.match(/\{(.*?)\}/);
+    return {
+      name: name || productId,
+      network: networkMatch?.[1] ?? "—",
+      niche: nicheMatch?.[1] ?? "—",
+    };
+  };
 
   return (
     <div className="space-y-6">
@@ -196,36 +241,59 @@ export default function AddOfferForm() {
             Add New Offer
           </CardTitle>
           <CardDescription>
-            Register a new affiliate offer to track
+            Register a new affiliate offer. Agents will discover and promote
+            offers you add here.
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="space-y-1.5 sm:col-span-1">
-                <Label htmlFor="productId">Product Name / ID</Label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <Label htmlFor="productName">Product Name</Label>
                 <Input
-                  id="productId"
+                  id="productName"
                   data-ocid="offer.product_id.input"
-                  value={productId}
-                  onChange={(e) => setProductId(e.target.value)}
-                  placeholder="JavaBurn, BioFit..."
+                  value={productName}
+                  onChange={(e) => setProductName(e.target.value)}
+                  placeholder="e.g. JavaBurn, BioFit, Keto Prime..."
                   required
                   className="bg-card"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor="price" className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" /> Price ($)
+                <Label htmlFor="network">Network</Label>
+                <Input
+                  id="network"
+                  data-ocid="offer.network.input"
+                  value={network}
+                  onChange={(e) => setNetwork(e.target.value)}
+                  placeholder="ClickBank, JVZoo, Digistore24..."
+                  className="bg-card"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="niche">Niche</Label>
+                <Input
+                  id="niche"
+                  data-ocid="offer.niche.input"
+                  value={niche}
+                  onChange={(e) => setNiche(e.target.value)}
+                  placeholder="weight loss, crypto, fitness..."
+                  className="bg-card"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="payout" className="flex items-center gap-1">
+                  <DollarSign className="h-3 w-3" /> Payout ($)
                 </Label>
                 <Input
-                  id="price"
+                  id="payout"
                   data-ocid="offer.price.input"
                   type="number"
                   min="0"
                   step="0.01"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
+                  value={payout}
+                  onChange={(e) => setPayout(e.target.value)}
                   placeholder="47.00"
                   required
                   className="bg-card"
@@ -240,8 +308,8 @@ export default function AddOfferForm() {
                   min="0"
                   max="100"
                   step="1"
-                  value={commission}
-                  onChange={(e) => setCommission(e.target.value)}
+                  value={commissionPct}
+                  onChange={(e) => setCommissionPct(e.target.value)}
                   placeholder="50"
                   className="bg-card"
                 />
@@ -250,7 +318,7 @@ export default function AddOfferForm() {
             <Button
               data-ocid="offer.submit_button"
               type="submit"
-              disabled={addOffer.isPending || !productId.trim() || !price}
+              disabled={addOffer.isPending || !productName.trim() || !payout}
               className="gap-2"
             >
               {addOffer.isPending ? (
@@ -266,6 +334,54 @@ export default function AddOfferForm() {
           </form>
         </CardContent>
       </Card>
+
+      {/* Success state after adding */}
+      <AnimatePresence>
+        {justAdded && (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, height: 0 }}
+            className="flex items-center gap-3 rounded-lg border border-chart-2/30 bg-chart-2/10 px-4 py-3"
+            data-ocid="offer.success_state"
+          >
+            <CheckCircle2 className="h-4 w-4 text-chart-2 shrink-0" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-chart-2">
+                "{justAdded.name}" added successfully
+              </p>
+              {justAdded.niche && (
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Ready for agents to discover and promote in the{" "}
+                  <span className="font-medium">{justAdded.niche}</span> niche
+                </p>
+              )}
+            </div>
+            {justAdded.niche && onLaunchCampaign && (
+              <Button
+                data-ocid="offer.launch_campaign.button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  onLaunchCampaign(justAdded.niche);
+                  setJustAdded(null);
+                }}
+                className="shrink-0 gap-1.5 border-chart-2/40 text-chart-2 hover:bg-chart-2/10 text-xs"
+              >
+                <Rocket className="h-3 w-3" />
+                Launch campaign for this niche
+              </Button>
+            )}
+            <button
+              type="button"
+              onClick={() => setJustAdded(null)}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Offers Table */}
       <Card>
@@ -289,7 +405,7 @@ export default function AddOfferForm() {
                 No offers yet
               </p>
               <p className="text-xs text-muted-foreground/60 mt-1">
-                Add your first affiliate offer above
+                Add your first affiliate offer above to get started
               </p>
             </div>
           ) : (
@@ -298,7 +414,9 @@ export default function AddOfferForm() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Product</TableHead>
-                    <TableHead>Price</TableHead>
+                    <TableHead>Network</TableHead>
+                    <TableHead>Niche</TableHead>
+                    <TableHead>Payout</TableHead>
                     <TableHead>Commission</TableHead>
                     <TableHead className="text-right">
                       <span className="flex items-center justify-end gap-1">
@@ -316,6 +434,7 @@ export default function AddOfferForm() {
                 </TableHeader>
                 <TableBody>
                   {offers.map((offer, idx) => {
+                    const parsed = parseProductDisplay(offer.productId);
                     const clicks =
                       performanceSummary?.clickCounts.find(
                         ([id]) => id === offer.id,
@@ -339,7 +458,7 @@ export default function AddOfferForm() {
                       >
                         <TableCell className="font-medium">
                           <div className="flex items-center gap-2">
-                            {offer.productId}
+                            {parsed.name}
                             <Badge
                               variant={isActive ? "default" : "secondary"}
                               className="text-xs"
@@ -347,6 +466,12 @@ export default function AddOfferForm() {
                               {isActive ? "Active" : "Ended"}
                             </Badge>
                           </div>
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {parsed.network}
+                        </TableCell>
+                        <TableCell className="text-muted-foreground text-sm">
+                          {parsed.niche}
                         </TableCell>
                         <TableCell>
                           ${(Number(offer.priceInCents) / 100).toFixed(2)}
@@ -385,7 +510,7 @@ export default function AddOfferForm() {
                                 className="gap-1.5 text-xs"
                               >
                                 <BarChart2 className="h-3.5 w-3.5" />
-                                Record
+                                Record Metrics
                               </Button>
                             </DialogTrigger>
                             <DialogContent data-ocid="offers.dialog">

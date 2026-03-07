@@ -13,11 +13,13 @@ import {
   Activity,
   Brain,
   CheckCircle,
+  Circle,
   Cpu,
   DollarSign,
   Loader2,
   MousePointerClick,
   PlayCircle,
+  Radio,
   Target,
   Timer,
   TrendingUp,
@@ -25,7 +27,7 @@ import {
   Zap,
 } from "lucide-react";
 import { motion } from "motion/react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AgentType } from "../backend";
 import {
   useGetAllAgentLogs,
@@ -50,6 +52,19 @@ const agentColors: Record<AgentType, string> = {
   [AgentType.analytics]: "text-chart-4",
 };
 
+const agentBadgeColors: Record<AgentType, string> = {
+  [AgentType.habit]: "border-chart-3/30 text-chart-3 bg-chart-3/10",
+  [AgentType.affiliate]: "border-chart-2/30 text-chart-2 bg-chart-2/10",
+  [AgentType.copy]: "border-primary/30 text-primary bg-primary/10",
+  [AgentType.analytics]: "border-chart-4/30 text-chart-4 bg-chart-4/10",
+};
+
+type UnifiedLogEntry = {
+  agentType: AgentType;
+  message: string;
+  idx: number;
+};
+
 export default function SystemMonitor() {
   const { data: automationStatuses } = useGetAllAutomationStatuses();
   const { data: logs } = useGetAllAgentLogs();
@@ -59,6 +74,26 @@ export default function SystemMonitor() {
   const startTimer = useStartRecurringTimer();
 
   const [isExecutingAll, setIsExecutingAll] = useState(false);
+  const [lastUpdateTime, setLastUpdateTime] = useState<Date | null>(null);
+  const [isLive, setIsLive] = useState(false);
+  const prevLogCountRef = useRef(0);
+
+  // Detect new logs for LIVE badge
+  useEffect(() => {
+    if (!logs) return;
+    const count =
+      logs.habit.length +
+      logs.affiliate.length +
+      logs.copy.length +
+      logs.analytics.length;
+    if (count > prevLogCountRef.current) {
+      prevLogCountRef.current = count;
+      setLastUpdateTime(new Date());
+      setIsLive(true);
+      const t = setTimeout(() => setIsLive(false), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [logs]);
 
   const handleRunAll = () => {
     setIsExecutingAll(true);
@@ -97,6 +132,26 @@ export default function SystemMonitor() {
     return { success, failure: total - success, total };
   })();
 
+  // Build a unified chronological log feed (interleaved by position index)
+  const unifiedLogs: UnifiedLogEntry[] = (() => {
+    if (!logs) return [];
+    const entries: UnifiedLogEntry[] = [];
+    const agentTypes = [
+      AgentType.affiliate,
+      AgentType.habit,
+      AgentType.copy,
+      AgentType.analytics,
+    ] as AgentType[];
+    for (const agentType of agentTypes) {
+      const agentLogs = logs[agentType] ?? [];
+      agentLogs.forEach((msg, idx) => {
+        entries.push({ agentType, message: msg, idx });
+      });
+    }
+    // Reverse to show most recent first (logs are ordered oldest-first)
+    return entries.reverse().slice(0, 50);
+  })();
+
   const systemHealth = Math.min(100, 70 + (activeCount / 4) * 30);
   const totalClicks =
     performanceSummary?.clickCounts.reduce((s, [, c]) => s + Number(c), 0) ?? 0;
@@ -106,16 +161,38 @@ export default function SystemMonitor() {
       performanceSummary.conversionRates.length
     : 0;
 
+  const formatLastUpdate = () => {
+    if (!lastUpdateTime) return null;
+    const diff = Math.floor((Date.now() - lastUpdateTime.getTime()) / 1000);
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    return lastUpdateTime.toLocaleTimeString();
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div>
-          <h3 className="text-2xl font-bold font-display">System Monitor</h3>
-          <p className="text-sm text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <h3 className="text-2xl font-bold font-display">Agent Logs</h3>
+            {isLive && (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="flex items-center gap-1.5 rounded-full border border-chart-2/30 bg-chart-2/15 px-2.5 py-0.5"
+              >
+                <Radio className="h-3 w-3 text-chart-2 animate-pulse" />
+                <span className="text-xs font-semibold text-chart-2">LIVE</span>
+              </motion.div>
+            )}
+          </div>
+          <p className="text-sm text-muted-foreground mt-0.5">
             {activeCount > 0
               ? `${activeCount} of 4 agents active — system processing`
-              : "Real-time health, metrics, and execution logs"}
+              : lastUpdateTime
+                ? `Last run: ${formatLastUpdate()}`
+                : "Real-time health, metrics, and execution logs"}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap">
@@ -179,7 +256,7 @@ export default function SystemMonitor() {
             progress: null,
           },
           {
-            label: "Knowledge Core",
+            label: "Knowledge Entries",
             value: knowledgeEntries.length.toString(),
             sub: "shared intel entries",
             icon: Brain,
@@ -406,7 +483,7 @@ export default function SystemMonitor() {
         </Card>
       </div>
 
-      {/* Live logs */}
+      {/* Unified Live Log Feed */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
@@ -414,8 +491,21 @@ export default function SystemMonitor() {
               <CardTitle className="flex items-center gap-2 text-sm">
                 <TrendingUp className="h-4 w-4 text-primary" />
                 Live Execution Logs
+                {isLive && (
+                  <span className="flex items-center gap-1 text-[10px] font-semibold text-chart-2">
+                    <span className="h-1.5 w-1.5 rounded-full bg-chart-2 animate-pulse inline-block" />
+                    LIVE
+                  </span>
+                )}
               </CardTitle>
-              <CardDescription>Real-time agent activity stream</CardDescription>
+              <CardDescription className="mt-0.5">
+                Unified real-time feed from all agents
+                {lastUpdateTime && (
+                  <span className="ml-2 font-mono">
+                    · Last update: {formatLastUpdate()}
+                  </span>
+                )}
+              </CardDescription>
             </div>
             <Badge variant="outline" className="font-mono text-xs">
               {globalStats.total} entries
@@ -423,39 +513,36 @@ export default function SystemMonitor() {
           </div>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-52 rounded-lg border border-border bg-card/50 p-3">
-            {logs && globalStats.total > 0 ? (
-              <div className="space-y-1.5">
-                {Object.entries(logs)
-                  .flatMap(([type, entries]) =>
-                    entries.map((log, i) => ({
-                      type,
-                      log,
-                      key: `${type}-${i}`,
-                    })),
-                  )
-                  .reverse()
-                  .slice(0, 30)
-                  .map(({ type, log, key }) => (
-                    <div key={key} className="flex items-start gap-2 text-xs">
-                      <Badge
-                        variant="outline"
-                        className={`shrink-0 text-[10px] py-0 capitalize ${agentColors[type as AgentType] ?? ""}`}
-                      >
-                        {agentLabels[type as AgentType] ?? type}
-                      </Badge>
-                      <span className="font-mono text-muted-foreground leading-relaxed">
-                        {log}
-                      </span>
-                    </div>
-                  ))}
+          <ScrollArea className="h-64 rounded-lg border border-border bg-card/50 p-3">
+            {unifiedLogs.length > 0 ? (
+              <div className="space-y-2">
+                {unifiedLogs.map(({ agentType, message, idx }) => (
+                  <div
+                    key={`${agentType}-${idx}`}
+                    className="flex items-start gap-2 text-xs"
+                  >
+                    <Badge
+                      variant="outline"
+                      className={`shrink-0 text-[10px] py-0 capitalize ${agentBadgeColors[agentType]}`}
+                    >
+                      {agentLabels[agentType]}
+                    </Badge>
+                    <span className="font-mono text-muted-foreground leading-relaxed">
+                      {message}
+                    </span>
+                  </div>
+                ))}
               </div>
             ) : (
               <div
                 data-ocid="monitor.logs.empty_state"
-                className="flex h-full items-center justify-center text-sm text-muted-foreground"
+                className="flex h-full flex-col items-center justify-center gap-2 text-center"
               >
-                No logs yet — run agents to see activity
+                <Circle className="h-8 w-8 text-muted-foreground/20" />
+                <p className="text-sm text-muted-foreground">No logs yet</p>
+                <p className="text-xs text-muted-foreground/60">
+                  Run agents or launch a campaign to see activity here
+                </p>
               </div>
             )}
           </ScrollArea>

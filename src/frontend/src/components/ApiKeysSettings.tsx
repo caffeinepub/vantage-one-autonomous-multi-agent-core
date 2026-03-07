@@ -1,12 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Eye, EyeOff, Info, Key, Save, ShieldCheck } from "lucide-react";
@@ -104,19 +98,20 @@ export default function ApiKeysSettings() {
 
   return (
     <div className="space-y-4">
+      {/* Clarified info card */}
       <Card className="border-primary/20 bg-primary/5">
         <CardContent className="pt-4 pb-4">
           <div className="flex items-start gap-3">
             <Info className="h-4 w-4 text-primary mt-0.5 shrink-0" />
             <div className="space-y-1">
               <p className="text-sm font-medium text-primary">
-                Keys stored locally in your browser
+                Keys are saved in your browser
               </p>
               <p className="text-xs text-muted-foreground">
-                API keys are saved to your browser's localStorage and never sent
-                to any server. They are used client-side only to configure your
-                affiliate network connections. For maximum security, only enter
-                keys on trusted devices.
+                Keys are saved in your browser and never sent to any server. The
+                system uses them to identify your affiliate accounts. Real API
+                integration with ClickBank and JVZoo is coming in a future
+                update — for now, keys are stored for reference.
               </p>
             </div>
           </div>

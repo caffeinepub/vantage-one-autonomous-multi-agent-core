@@ -46,7 +46,13 @@ import {
 import AddOfferForm from "./AddOfferForm";
 import ApiKeysSettings from "./ApiKeysSettings";
 
-export default function AdminDashboard() {
+interface AdminDashboardProps {
+  onLaunchCampaign?: (niche: string) => void;
+}
+
+export default function AdminDashboard({
+  onLaunchCampaign,
+}: AdminDashboardProps) {
   const { data: isAdmin, isLoading: adminLoading } = useIsCallerAdmin();
   const { data: cloneSettings, isLoading: settingsLoading } =
     useGetCloneProtectionSettings();
@@ -268,7 +274,7 @@ export default function AdminDashboard() {
               </CardContent>
             </Card>
           ) : (
-            <AddOfferForm />
+            <AddOfferForm onLaunchCampaign={onLaunchCampaign} />
           )}
         </TabsContent>
 

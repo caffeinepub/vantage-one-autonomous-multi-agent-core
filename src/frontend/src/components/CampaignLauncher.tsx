@@ -1,7 +1,10 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { useQueryClient } from "@tanstack/react-query";
 import {
+  AlertCircle,
   BarChart2,
   CheckCircle2,
   ChevronRight,
@@ -12,58 +15,59 @@ import {
   Zap,
 } from "lucide-react";
 import { AnimatePresence, motion } from "motion/react";
-import { useEffect, useState } from "react";
-import { useRunAllAgents } from "../hooks/useQueries";
+import { useState } from "react";
+import { AgentType } from "../backend";
+import type { KnowledgeEntry } from "../backend";
+import {
+  useGetCallerKnowledgeEntries,
+  useGetTotalActiveOffers,
+  useRunAllAgents,
+} from "../hooks/useQueries";
 
 type PipelineStep = {
   id: string;
   label: string;
   icon: typeof TrendingUp;
   color: string;
-  output: string;
+  agentType: AgentType;
   status: "pending" | "running" | "done";
 };
 
-const buildPipeline = (niche: string): PipelineStep[] => [
+const PIPELINE_STEPS: Omit<PipelineStep, "status">[] = [
   {
     id: "affiliate",
     label: "Affiliate Agent",
     icon: TrendingUp,
     color: "text-chart-2",
-    output: `Found 3 offers | Top: JavaBurn (gravity: 110, payout: $42) for niche: ${niche}`,
-    status: "pending",
+    agentType: AgentType.affiliate,
   },
   {
     id: "funnel",
     label: "Funnel Agent",
     icon: Zap,
     color: "text-chart-3",
-    output: `Funnel mapped | 3 steps: Traffic → Bridge → Offer (${niche})`,
-    status: "pending",
+    agentType: AgentType.habit,
   },
   {
     id: "copy",
     label: "Copy Agent",
     icon: FileText,
     color: "text-chart-1",
-    output: `Generated landing page | Headline: "The System Behind JavaBurn's Breakthrough Results"`,
-    status: "pending",
+    agentType: AgentType.copy,
   },
   {
     id: "traffic",
     label: "Traffic Agent",
     icon: ChevronRight,
     color: "text-primary",
-    output: `SEO strategy ready | Keywords: "${niche} without ads", "best ${niche} system"`,
-    status: "pending",
+    agentType: AgentType.affiliate,
   },
   {
     id: "analytics",
     label: "Analytics Agent",
     icon: BarChart2,
     color: "text-chart-4",
-    output: `Analyzed 5 data points | Best niche: ${niche} (82% score) — pipeline optimized`,
-    status: "pending",
+    agentType: AgentType.analytics,
   },
 ];
 
@@ -75,39 +79,55 @@ const NICHES = [
   "debt relief",
 ];
 
+const agentTypeConfig: Record<AgentType, { label: string; color: string }> = {
+  [AgentType.habit]: { label: "Funnel", color: "text-chart-3" },
+  [AgentType.affiliate]: { label: "Affiliate", color: "text-chart-2" },
+  [AgentType.copy]: { label: "Copy", color: "text-primary" },
+  [AgentType.analytics]: { label: "Analytics", color: "text-chart-4" },
+};
+
 interface CampaignLauncherProps {
   onLaunched?: () => void;
+  onGoToAdmin?: () => void;
 }
 
 export default function CampaignLauncher({
   onLaunched,
+  onGoToAdmin,
 }: CampaignLauncherProps) {
   const [niche, setNiche] = useState("");
   const [pipeline, setPipeline] = useState<PipelineStep[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const runAllAgents = useRunAllAgents();
+  const [campaignResults, setCampaignResults] = useState<KnowledgeEntry[]>([]);
 
-  const handleLaunch = () => {
+  const runAllAgents = useRunAllAgents();
+  const { data: totalActiveOffers } = useGetTotalActiveOffers();
+  const { data: knowledgeEntries = [] } = useGetCallerKnowledgeEntries();
+  const queryClient = useQueryClient();
+
+  const offerCount =
+    totalActiveOffers !== undefined ? Number(totalActiveOffers) : null;
+  const hasNoOffers = offerCount === 0;
+
+  const handleLaunch = async () => {
     if (!niche.trim()) return;
-    const nicheValue = niche.trim();
-    const steps = buildPipeline(nicheValue);
-    setPipeline(steps.map((s) => ({ ...s, status: "pending" })));
+    const steps: PipelineStep[] = PIPELINE_STEPS.map((s) => ({
+      ...s,
+      status: "pending",
+    }));
+    setPipeline(steps);
     setIsRunning(true);
     setIsComplete(false);
+    setCampaignResults([]);
 
-    // Fire backend
-    runAllAgents.mutate();
-
-    // Animate pipeline steps sequentially
+    // Animate pipeline steps
     steps.forEach((_, idx) => {
-      // Start step
       setTimeout(() => {
         setPipeline((prev) =>
           prev.map((s, i) => (i === idx ? { ...s, status: "running" } : s)),
         );
       }, idx * 1400);
-      // Complete step
       setTimeout(
         () => {
           setPipeline((prev) =>
@@ -118,25 +138,102 @@ export default function CampaignLauncher({
       );
     });
 
-    // All done
-    setTimeout(
-      () => {
+    // Fire backend and wait for completion
+    const animDuration = steps.length * 1400 + 600;
+    runAllAgents.mutate(undefined, {
+      onSuccess: () => {
+        // After backend completes, refetch knowledge entries and show results
+        setTimeout(
+          () => {
+            queryClient
+              .invalidateQueries({ queryKey: ["knowledgeEntries"] })
+              .then(() => {
+                const fresh =
+                  queryClient.getQueryData<KnowledgeEntry[]>([
+                    "knowledgeEntries",
+                  ]) ?? knowledgeEntries;
+                // Show up to 4 most recent entries
+                const sorted = [...fresh].sort(
+                  (a, b) => Number(b.timestamp) - Number(a.timestamp),
+                );
+                setCampaignResults(sorted.slice(0, 4));
+                setIsRunning(false);
+                setIsComplete(true);
+                onLaunched?.();
+              });
+          },
+          Math.max(0, animDuration - 1000),
+        );
+      },
+      onError: () => {
+        setTimeout(() => {
+          setIsRunning(false);
+          setIsComplete(false);
+          setPipeline([]);
+        }, animDuration);
+      },
+    });
+
+    // Finish animation regardless
+    setTimeout(() => {
+      if (!isComplete) {
         setIsRunning(false);
         setIsComplete(true);
+        // Surface latest knowledge entries from cache
+        const cached =
+          queryClient.getQueryData<KnowledgeEntry[]>(["knowledgeEntries"]) ??
+          [];
+        const sorted = [...cached].sort(
+          (a, b) => Number(b.timestamp) - Number(a.timestamp),
+        );
+        setCampaignResults(sorted.slice(0, 4));
         onLaunched?.();
-      },
-      steps.length * 1400 + 600,
-    );
+      }
+    }, animDuration);
   };
 
   const handleReset = () => {
     setPipeline([]);
     setIsComplete(false);
     setNiche("");
+    setCampaignResults([]);
   };
 
   return (
     <div className="space-y-5">
+      {/* No-offers nudge */}
+      {hasNoOffers && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3"
+          data-ocid="campaign.no_offers.panel"
+        >
+          <AlertCircle className="h-4 w-4 text-amber-400 mt-0.5 shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-medium text-amber-300">
+              Your first step: Add affiliate offers
+            </p>
+            <p className="text-xs text-amber-400/80 mt-0.5">
+              Go to Admin → Offers section and add an offer. The agents need
+              offers to pick from — without them, campaigns can't select a
+              product.
+            </p>
+          </div>
+          {onGoToAdmin && (
+            <Button
+              data-ocid="campaign.go_to_admin.button"
+              size="sm"
+              variant="outline"
+              onClick={onGoToAdmin}
+              className="shrink-0 border-amber-500/40 text-amber-300 hover:bg-amber-500/10 hover:border-amber-500/60 text-xs"
+            >
+              Go to Admin → Offers
+            </Button>
+          )}
+        </motion.div>
+      )}
+
       {/* Launcher Input */}
       <div className="flex gap-3">
         <div className="relative flex-1">
@@ -203,7 +300,7 @@ export default function CampaignLauncher({
             <div className="rounded-lg border border-border bg-card/50 p-4 space-y-2">
               <div className="flex items-center justify-between mb-3">
                 <span className="text-xs font-semibold tracking-widest text-muted-foreground uppercase">
-                  Campaign Pipeline
+                  Campaign Pipeline — {niche}
                 </span>
                 {isComplete && (
                   <motion.div
@@ -281,23 +378,76 @@ export default function CampaignLauncher({
                             </span>
                           )}
                         </div>
-                        <AnimatePresence>
-                          {step.status === "done" && (
-                            <motion.p
-                              initial={{ opacity: 0, y: -4 }}
-                              animate={{ opacity: 1, y: 0 }}
-                              className="text-xs font-mono text-muted-foreground mt-0.5 truncate"
-                            >
-                              {step.output}
-                            </motion.p>
-                          )}
-                        </AnimatePresence>
                       </div>
                     </motion.div>
                   );
                 })}
               </div>
             </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Campaign Results — real data from knowledge entries */}
+      <AnimatePresence>
+        {isComplete && (
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, height: 0 }}
+            className="rounded-lg border border-chart-2/20 bg-chart-2/5 p-4 space-y-3"
+            data-ocid="campaign.results.panel"
+          >
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-chart-2" />
+              <span className="text-sm font-semibold text-chart-2">
+                Campaign Results
+              </span>
+              <Badge
+                variant="outline"
+                className="ml-auto text-xs text-chart-2 border-chart-2/30"
+              >
+                {campaignResults.length} outputs
+              </Badge>
+            </div>
+
+            {campaignResults.length === 0 ? (
+              <p className="text-xs text-muted-foreground font-mono py-2">
+                No knowledge entries yet. Run agents a few times to build up
+                results — they write to the knowledge core on each execution.
+              </p>
+            ) : (
+              <ScrollArea className="max-h-60">
+                <div className="space-y-2 pr-2">
+                  {campaignResults.map((entry, i) => {
+                    const cfg = agentTypeConfig[entry.sourceAgent] ?? {
+                      label: "Agent",
+                      color: "text-muted-foreground",
+                    };
+                    return (
+                      <motion.div
+                        key={entry.id}
+                        initial={{ opacity: 0, x: -8 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.06 }}
+                        data-ocid={`campaign.result.item.${i + 1}`}
+                        className="flex gap-2.5 rounded-md border border-border bg-card/60 p-2.5"
+                      >
+                        <Badge
+                          variant="outline"
+                          className={`text-[10px] py-0 shrink-0 self-start mt-0.5 capitalize ${cfg.color}`}
+                        >
+                          {cfg.label}
+                        </Badge>
+                        <p className="text-xs font-mono text-foreground leading-relaxed">
+                          {entry.content}
+                        </p>
+                      </motion.div>
+                    );
+                  })}
+                </div>
+              </ScrollArea>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

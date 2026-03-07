@@ -20,9 +20,11 @@ import {
 import { motion } from "motion/react";
 import { useEffect, useState } from "react";
 import { AgentType } from "../backend";
+import type { KnowledgeEntry } from "../backend";
 import {
   useGetAllAgentLogs,
   useGetAllAutomationStatuses,
+  useGetCallerKnowledgeEntries,
   useGetOfferPerformanceSummary,
   useRunAgent,
   useRunAllAgents,
@@ -40,7 +42,6 @@ const agentTypeConfig = {
     glowClass: "glow-purple",
     accentClass: "text-chart-3",
     bgAccent: "bg-chart-3/10 border-chart-3/20",
-    lastOutput: "Funnel mapped | 3 steps: Traffic → Bridge → Offer",
     description: "Maps and optimizes conversion funnels",
   },
   [AgentType.affiliate]: {
@@ -53,7 +54,6 @@ const agentTypeConfig = {
     glowClass: "glow-green",
     accentClass: "text-chart-2",
     bgAccent: "bg-chart-2/10 border-chart-2/20",
-    lastOutput: "Found 3 offers | Top: JavaBurn (gravity: 110, payout: $42)",
     description: "Discovers and ranks affiliate offers",
   },
   [AgentType.copy]: {
@@ -66,8 +66,6 @@ const agentTypeConfig = {
     glowClass: "glow-blue",
     accentClass: "text-primary",
     bgAccent: "bg-primary/10 border-primary/20",
-    lastOutput:
-      'Generated landing page | Headline: "The System Behind JavaBurn\'s Breakthrough Results"',
     description: "Writes high-converting copy & pages",
   },
   [AgentType.analytics]: {
@@ -80,7 +78,6 @@ const agentTypeConfig = {
     glowClass: "glow-purple",
     accentClass: "text-chart-4",
     bgAccent: "bg-chart-4/10 border-chart-4/20",
-    lastOutput: "Analyzed 5 data points | Best niche: weight loss (82% score)",
     description: "Analyzes data & evolves strategies",
   },
 };
@@ -92,11 +89,25 @@ const allAgentTypes = [
   AgentType.analytics,
 ];
 
+/** Returns the most recent knowledge entry for a given agent type */
+function getLastOutputForAgent(
+  entries: KnowledgeEntry[],
+  agentType: AgentType,
+): string | null {
+  const agentEntries = entries.filter((e) => e.sourceAgent === agentType);
+  if (agentEntries.length === 0) return null;
+  const sorted = [...agentEntries].sort(
+    (a, b) => Number(b.timestamp) - Number(a.timestamp),
+  );
+  return sorted[0].content;
+}
+
 export default function AgentsDashboard() {
   const { data: logs, isLoading: logsLoading } = useGetAllAgentLogs();
   const { data: automationStatuses, isLoading: statusesLoading } =
     useGetAllAutomationStatuses();
   const { data: performanceSummary } = useGetOfferPerformanceSummary();
+  const { data: knowledgeEntries = [] } = useGetCallerKnowledgeEntries();
   const runAgent = useRunAgent();
   const runAllAgents = useRunAllAgents();
 
@@ -249,12 +260,20 @@ export default function AgentsDashboard() {
           const progress = thinkingProgress[agentType] ?? 0;
           const runCount = getRunCount(agentType);
           const agentLogs = getLogs(agentType);
-          const lastLog = agentLogs[agentLogs.length - 1] ?? cfg.lastOutput;
           const autoStatus = automationStatuses?.find(
             ([t]) => t === agentType,
           )?.[1];
           const totalExec = Number(autoStatus?.totalExecutions ?? 0);
           const lastRun = autoStatus?.lastRun;
+
+          // Use real knowledge entry output, fall back to meaningful empty state
+          const realLastOutput = getLastOutputForAgent(
+            knowledgeEntries,
+            agentType,
+          );
+          const displayOutput =
+            realLastOutput ??
+            "No runs yet — launch a campaign to activate this agent";
 
           return (
             <motion.div
@@ -338,16 +357,30 @@ export default function AgentsDashboard() {
                     </div>
                   )}
 
-                  {/* Last output */}
+                  {/* Last output — real data from knowledge entries */}
                   <div className={`rounded-lg border p-3 ${cfg.bgAccent}`}>
                     <div className="flex items-center gap-1.5 mb-1.5">
                       <Terminal className="h-3 w-3 text-muted-foreground" />
                       <span className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">
                         Last Output
                       </span>
+                      {realLastOutput && (
+                        <Badge
+                          variant="outline"
+                          className="ml-auto text-[9px] py-0 border-chart-2/30 text-chart-2"
+                        >
+                          live
+                        </Badge>
+                      )}
                     </div>
-                    <p className="text-xs font-mono text-foreground leading-relaxed line-clamp-3">
-                      {lastLog}
+                    <p
+                      className={`text-xs font-mono leading-relaxed line-clamp-3 ${
+                        realLastOutput
+                          ? "text-foreground"
+                          : "text-muted-foreground/60 italic"
+                      }`}
+                    >
+                      {displayOutput}
                     </p>
                   </div>
 
@@ -406,7 +439,7 @@ export default function AgentsDashboard() {
                           .reverse()
                           .map((log) => (
                             <p
-                              key={log}
+                              key={`${agentType}-${log.slice(0, 48)}`}
                               className="text-[10px] font-mono text-muted-foreground leading-tight"
                             >
                               {log}
