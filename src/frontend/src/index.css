@@ -1,0 +1,272 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Fonts ────────────────────────────────────────────────── */
+@font-face {
+  font-family: "Geist Mono";
+  src: url("/assets/fonts/GeistMono[wght].woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Mona Sans";
+  src: url("/assets/fonts/MonaSans[wdth,wght].woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+@font-face {
+  font-family: "Outfit";
+  src: url("/assets/fonts/Outfit[wght].woff2") format("woff2");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+/* ── Design Tokens ────────────────────────────────────────── */
+@layer base {
+  :root {
+    --radius: 0.5rem;
+    /* Command-center dark palette — cyberpunk/terminal aesthetic */
+    --background: 0.09 0.012 265;
+    --foreground: 0.96 0.012 220;
+    --card: 0.12 0.018 265;
+    --card-foreground: 0.96 0.012 220;
+    --popover: 0.13 0.018 265;
+    --popover-foreground: 0.96 0.012 220;
+    /* Electric cyan-blue primary */
+    --primary: 0.72 0.19 218;
+    --primary-foreground: 0.09 0.012 265;
+    /* Muted violet secondary */
+    --secondary: 0.18 0.022 265;
+    --secondary-foreground: 0.88 0.012 220;
+    --muted: 0.16 0.015 265;
+    --muted-foreground: 0.56 0.018 240;
+    --accent: 0.22 0.03 265;
+    --accent-foreground: 0.96 0.012 220;
+    --destructive: 0.65 0.22 27;
+    --destructive-foreground: 0.98 0 0;
+    --border: 1 0 0 / 10%;
+    --input: 1 0 0 / 12%;
+    --ring: 0.72 0.19 218;
+    /* Chart / agent colors */
+    --chart-1: 0.72 0.19 218;
+    --chart-2: 0.75 0.22 160;
+    --chart-3: 0.68 0.22 295;
+    --chart-4: 0.75 0.18 58;
+    --chart-5: 0.65 0.22 27;
+    /* Neon glow helpers */
+    --neon-blue: 0.72 0.19 218;
+    --neon-green: 0.75 0.22 160;
+    --neon-purple: 0.68 0.22 295;
+    --neon-amber: 0.75 0.18 58;
+    --sidebar: 0.11 0.014 265;
+    --sidebar-foreground: 0.96 0.012 220;
+    --sidebar-primary: 0.72 0.19 218;
+    --sidebar-primary-foreground: 0.09 0.012 265;
+    --sidebar-accent: 0.18 0.022 265;
+    --sidebar-accent-foreground: 0.88 0.012 220;
+    --sidebar-border: 1 0 0 / 10%;
+    --sidebar-ring: 0.72 0.19 218;
+  }
+
+  /* Force dark — this is always a dark command-center app */
+  .dark,
+  :root {
+    color-scheme: dark;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    background-image: radial-gradient(
+        ellipse 80% 50% at 50% -20%,
+        oklch(0.72 0.19 218 / 0.06) 0%,
+        transparent 100%
+      ),
+      radial-gradient(
+        ellipse 60% 40% at 80% 80%,
+        oklch(0.68 0.22 295 / 0.04) 0%,
+        transparent 60%
+      );
+  }
+}
+
+/* ── Neon Glow Utilities ──────────────────────────────────── */
+@layer utilities {
+  .glow-blue {
+    box-shadow: 0 0 20px oklch(0.72 0.19 218 / 0.35), 0 0 40px
+      oklch(0.72 0.19 218 / 0.12);
+  }
+  .glow-green {
+    box-shadow: 0 0 20px oklch(0.75 0.22 160 / 0.35), 0 0 40px
+      oklch(0.75 0.22 160 / 0.12);
+  }
+  .glow-purple {
+    box-shadow: 0 0 20px oklch(0.68 0.22 295 / 0.35), 0 0 40px
+      oklch(0.68 0.22 295 / 0.12);
+  }
+  .glow-amber {
+    box-shadow: 0 0 20px oklch(0.75 0.18 58 / 0.35), 0 0 40px
+      oklch(0.75 0.18 58 / 0.12);
+  }
+  .text-glow-blue {
+    text-shadow: 0 0 20px oklch(0.72 0.19 218 / 0.6);
+  }
+  .text-glow-green {
+    text-shadow: 0 0 20px oklch(0.75 0.22 160 / 0.6);
+  }
+  .grid-bg {
+    background-image: linear-gradient(oklch(1 0 0 / 0.03) 1px, transparent 1px),
+      linear-gradient(90deg, oklch(1 0 0 / 0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+  }
+  .card-command {
+    background: oklch(0.12 0.018 265 / 0.95);
+    border: 1px solid oklch(1 0 0 / 0.08);
+    backdrop-filter: blur(12px);
+  }
+  .card-command:hover {
+    border-color: oklch(0.72 0.19 218 / 0.25);
+    box-shadow: 0 0 24px oklch(0.72 0.19 218 / 0.08);
+  }
+  .scan-line {
+    background: linear-gradient(
+      transparent 0%,
+      oklch(0.72 0.19 218 / 0.03) 50%,
+      transparent 100%
+    );
+    animation: scan 4s linear infinite;
+  }
+}
+
+/* ── Keyframe Animations ──────────────────────────────────── */
+@keyframes scan {
+  0% {
+    transform: translateY(-100%);
+  }
+  100% {
+    transform: translateY(100vh);
+  }
+}
+
+@keyframes pulse-glow {
+  0%,
+  100% {
+    opacity: 1;
+    box-shadow: 0 0 12px oklch(0.72 0.19 218 / 0.5);
+  }
+  50% {
+    opacity: 0.85;
+    box-shadow: 0 0 28px oklch(0.72 0.19 218 / 0.9);
+  }
+}
+
+@keyframes data-flow {
+  0% {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+}
+
+@keyframes thinking-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.72 0.19 218 / 0.7);
+  }
+  50% {
+    box-shadow: 0 0 0 12px oklch(0.72 0.19 218 / 0);
+  }
+}
+
+@keyframes pipeline-complete {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes border-glow {
+  0%,
+  100% {
+    border-color: oklch(0.72 0.19 218 / 0.3);
+  }
+  50% {
+    border-color: oklch(0.72 0.19 218 / 0.8);
+  }
+}
+
+@keyframes float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
+@keyframes active-badge {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 2s ease-in-out infinite;
+}
+.animate-data-flow {
+  animation: data-flow 2s ease-in-out infinite;
+}
+.animate-thinking-pulse {
+  animation: thinking-pulse 1.5s ease-in-out infinite;
+}
+.animate-pipeline-complete {
+  animation: pipeline-complete 0.5s ease-out forwards;
+}
+.animate-border-glow {
+  animation: border-glow 2s ease-in-out infinite;
+}
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+.animate-active-badge {
+  animation: active-badge 1.5s ease-in-out infinite;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: oklch(0.12 0.018 265);
+}
+::-webkit-scrollbar-thumb {
+  background: oklch(0.72 0.19 218 / 0.4);
+  border-radius: 99px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: oklch(0.72 0.19 218 / 0.7);
+}
